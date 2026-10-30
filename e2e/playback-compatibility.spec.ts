@@ -3,6 +3,7 @@ import type { NativePlayerInfo, NativePlayerOptions } from '../src/shared/types'
 
 interface CompatibilityHarness {
   sources: number
+  sourceError?: string
   launches: NativePlayerOptions[]
   finishDetection: () => void
   finishSource: () => void
@@ -18,6 +19,7 @@ async function preparePlayback(
     deferDetection?: boolean
     deferSource?: boolean
     failLaunch?: boolean
+    sourceError?: string
   } = {},
 ): Promise<void> {
   await page.goto('/')
@@ -29,6 +31,7 @@ async function preparePlayback(
     video.value.resumePosSec = 73.4
     const state: CompatibilityHarness = {
       sources: 0,
+      sourceError: settings.sourceError,
       launches: [],
       finishDetection: () => undefined,
       finishSource: () => undefined,
@@ -44,6 +47,7 @@ async function preparePlayback(
     }
     window.api.videos.getPlaybackSource = async () => {
       state.sources += 1
+      if (state.sourceError) return { ok: false, error: state.sourceError }
       if (settings.deferSource)
         await new Promise<void>((resolve) => {
           state.finishSource = resolve
@@ -77,6 +81,27 @@ async function dispatchMediaError(page: Page, code: number): Promise<void> {
     video.dispatchEvent(new Event('error'))
   }, code)
 }
+
+test('missing drive explains file access and can retry after reconnection', async ({ page }) => {
+  await preparePlayback(page, {
+    codec: 'h264',
+    sourceError:
+      '영상 원본 파일을 찾을 수 없습니다. 외장 드라이브 또는 네트워크 드라이브 연결과 파일 위치를 확인한 뒤 다시 시도해 주세요.',
+  })
+  await expect(page.getByText('이 영상을 재생할 수 없습니다.', { exact: true })).toBeVisible()
+  await expect(page.getByText('영상 원본 파일을 찾을 수 없습니다.', { exact: false })).toBeVisible()
+  await expect(
+    page.getByText('이 영상의 코덱을 인앱 플레이어에서 재생할 수 없습니다.', { exact: true }),
+  ).toHaveCount(0)
+  await expect(page.locator('video')).not.toHaveAttribute('src')
+  await page.evaluate(() => {
+    ;(window as unknown as CompatibilityWindow).compatibilityHarness.sourceError = undefined
+  })
+  await page.getByRole('button', { name: '다시 시도', exact: true }).click()
+  await expect(page.locator('video')).toHaveAttribute('src', /compatible.mp4/)
+  await expect(page.getByText('이 영상을 재생할 수 없습니다.', { exact: true })).toHaveCount(0)
+  expect(await playbackState(page)).toEqual({ sources: 2, launches: [] })
+})
 
 test('MPEG-4 MP4 starts in-app before native discovery and preserves resume through a manual native round trip', async ({
   page,

@@ -1663,10 +1663,17 @@ function VideoPlayer({
               'absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 px-6 text-center text-sm text-red-300'
             }
           >
-            <p>{'이 영상을 재생 가능한 형식으로 준비하지 못했습니다.'}</p>
+            <p>{'이 영상을 재생할 수 없습니다.'}</p>
             {playbackSourceError && (
               <p className="max-w-lg text-xs">{playbackSourceError.message}</p>
             )}
+            <button
+              type="button"
+              onClick={() => setPlaybackSourceEpoch((value) => value + 1)}
+              className="rounded bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-500"
+            >
+              다시 시도
+            </button>
             <button
               type="button"
               onClick={() => navigate('/')}

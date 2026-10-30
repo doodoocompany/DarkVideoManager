@@ -1,12 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import childProcess, { type ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WebContents } from 'electron'
 import type { NativePlayerInfo } from '@shared/types'
 
-const state = vi.hoisted(() => ({ selected: null as NativePlayerInfo | null }))
+const state = vi.hoisted(() => ({ selected: null as NativePlayerInfo | null, videoPath: '' }))
 vi.mock('electron', () => ({ shell: {} }))
 vi.mock('../infra/config', () => ({
   loadConfig: () => ({ libraries: [], nativePlayer: state.selected }),
@@ -18,7 +20,7 @@ vi.mock('../db/connection', () => ({ getDatabase: () => ({}) }))
 vi.mock('../db/repositories/VideoRepository', () => ({
   VideoRepository: class {
     findById(id: string) {
-      return { id, filePath: 'synthetic-video.mp4' }
+      return { id, filePath: state.videoPath }
     }
   },
 }))
@@ -37,6 +39,8 @@ import { openVideoInNativePlayer } from './VideoService'
 import { openInMpv } from './MpvSessionService.js'
 
 beforeEach(() => {
+  state.videoPath = path.join(tmpdir(), `dvm-native-privacy-${randomUUID()}.mp4`)
+  fs.writeFileSync(state.videoPath, 'synthetic video')
   state.selected = {
     name: 'vlc',
     path: path.resolve('synthetic-native-player' + (process.platform === 'win32' ? '.exe' : '')),
@@ -48,6 +52,7 @@ beforeEach(() => {
 
 afterEach(() => {
   closeManagedNativePlayers()
+  fs.unlinkSync(state.videoPath)
   vi.restoreAllMocks()
   vi.clearAllMocks()
   vi.useRealTimers()
