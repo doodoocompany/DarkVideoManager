@@ -551,6 +551,7 @@ class SubtitleTests(unittest.TestCase):
     def ollama_response(self, result):
         response = Mock()
         response.json.return_value = result
+        response.iter_content.return_value = [(json.dumps(result, ensure_ascii=False) + "\n").encode("utf-8")]
         response.raise_for_status.return_value = None
         return response
 
@@ -730,7 +731,9 @@ class SubtitleTests(unittest.TestCase):
         self.assertIn(source, request["prompt"])
         self.assertEqual(request["options"], {"temperature": 0.0, "num_predict": 512})
         self.assertIs(request["think"], False)
-        self.assertIs(request["stream"], False)
+        self.assertIs(request["stream"], True)
+        self.assertIs(post.call_args.kwargs["stream"], True)
+        self.assertEqual(post.call_args.kwargs["timeout"], (5, 120))
         self.assertNotIn("format", request)
         self.assertEqual(post.call_count, 1)
         sleep.assert_not_called()
@@ -788,14 +791,14 @@ class SubtitleTests(unittest.TestCase):
         translator = generate.OllamaTranslator("ja", sleep=lambda seconds: None)
         with patch.object(generate, "translation_deadline", side_effect=lambda seconds: nullcontext()) as deadline:
             self.assertEqual(translator.translate("hello"), "성공")
-        self.assertEqual([call.args for call in deadline.call_args_list], [(65,), (65,), (65,)])
+        self.assertEqual([call.args for call in deadline.call_args_list], [(300,), (300,), (300,)])
         self.assertEqual(post.call_count, 3)
 
     def test_ollama_safe_failure_diagnostics_never_include_raw_response(self):
         import requests
         secret = "PRIVATE SUBTITLE OR RESPONSE"
         invalid_json = self.ollama_response(None)
-        invalid_json.json.side_effect = ValueError(secret)
+        invalid_json.iter_content.return_value = [secret.encode("utf-8")]
         errors = [
             (requests.exceptions.ReadTimeout(secret), "응답 시간이 초과"),
             (requests.exceptions.ConnectionError(secret), "연결할 수 없"),
@@ -840,7 +843,7 @@ class SubtitleTests(unittest.TestCase):
     def test_ollama_structured_final_response_is_strict_and_diagnostics_are_safe(self):
         secret = "PRIVATE SUBTITLE OR RESPONSE"
         invalid = [
-            (None, "JSON 형식"), ("", "JSON 형식"), (secret, "JSON 형식"),
+            (None, "문자열 형식"), ("", "JSON 형식"), (secret, "JSON 형식"),
             ('{"translation": "' + secret, "JSON 형식"),
             ('{"translation": "first", "translation": "' + secret + '"}', "JSON 형식"),
             (json.dumps(secret), "translation 문자열"),

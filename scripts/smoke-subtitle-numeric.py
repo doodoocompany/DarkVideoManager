@@ -40,20 +40,26 @@ def main():
     assert lists, "The selected cue must contain a long integer enumeration"
     translator = generate.OllamaTranslator(language)
     original_post = translator.requests.post
+    original_read_stream = translator.read_stream
     requests = []
 
     def observed_post(*positional, **keyword):
-        response = original_post(*positional, **keyword)
-        result = response.json()
         requests.append({
+            "input_characters": len(keyword["json"]["prompt"].split("<subtitle>\n", 1)[1].rsplit("\n</subtitle>", 1)[0]),
+        })
+        return original_post(*positional, **keyword)
+
+    def observed_read_stream(response):
+        result = original_read_stream(response)
+        requests[-1].update({
             "done": result.get("done"),
             "done_reason": result.get("done_reason"),
             "eval_count": result.get("eval_count"),
-            "input_characters": len(keyword["json"]["prompt"].split("<subtitle>\n", 1)[1].rsplit("\n</subtitle>", 1)[0]),
         })
-        return response
+        return result
 
     translator.requests.post = observed_post
+    translator.read_stream = observed_read_stream
     started = time.monotonic()
     translated = translator.translate(source)
     assert re.search("[가-힣]", translated), "Natural-language prefix was not translated to Korean"
