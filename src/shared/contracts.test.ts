@@ -22,6 +22,17 @@ import {
 } from './result'
 
 describe('IPC contracts', () => {
+  it('accepts every half-star rating without relaxing integer playback counts', () => {
+    const schema = IPC_SCHEMAS[IPC.VIDEOS.UPDATE_META]
+    for (let rating = 0; rating <= 5; rating += 0.5) {
+      expect(schema.parse(['lib', 'video', { rating }])).toEqual(['lib', 'video', { rating }])
+    }
+    for (const rating of [-0.5, 5.5, 0.25, 3.7, NaN, Infinity, '4.5']) {
+      expect(schema.safeParse(['lib', 'video', { rating }]).success).toBe(false)
+    }
+    expect(VideoMetaZ.safeParse({ rating: 4.5, playCount: 1.5 }).success).toBe(false)
+  })
+
   it('accepts update actions without accepting a feed URL, path, version or arbitrary settings', () => {
     for (const channel of [
       IPC.APP_UPDATE.GET,

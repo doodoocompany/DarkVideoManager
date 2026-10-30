@@ -174,6 +174,13 @@ beforeEach(() => {
 })
 
 describe('IPC dispatch', () => {
+  it('passes half-star ratings through to metadata storage', async () => {
+    expect(await invoke(IPC.VIDEOS.UPDATE_META, 'lib', 'video', { rating: 4.5 })).toMatchObject({
+      ok: true,
+    })
+    expect(mocks.updateVideoMeta).toHaveBeenCalledWith('lib', 'video', { rating: 4.5 })
+  })
+
   it('selects multiple folders and drive roots and imports them in one operation', async () => {
     const folderPaths = ['D:/', 'E:/Movies']
     mocks.showOpenDialog.mockResolvedValue({ canceled: false, filePaths: folderPaths })

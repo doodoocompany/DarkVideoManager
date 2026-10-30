@@ -150,20 +150,20 @@ test('classification normalizes input, reuses categories and never overwrites me
 
   await page.getByPlaceholder('이 영상에 대한 메모를 적어보세요...').fill('따로 저장한 메모')
   await expect.poll(async () => (await storedVideo(page))?.memo).toBe('따로 저장한 메모')
-  await page.getByRole('button', { name: '5점', exact: true }).click()
-  await expect.poll(async () => (await storedVideo(page))?.rating).toBe(5)
+  await page.getByRole('button', { name: '4.5점', exact: true }).click()
+  await expect.poll(async () => (await storedVideo(page))?.rating).toBe(4.5)
   expect(
     await page.evaluate(() => (window as unknown as MetadataWindow).metadataHarness.updates),
   ).toEqual([
     { videoId: 'mock-video-1', meta: { category: '야구', tags: '선수명, 리그' } },
     { videoId: 'mock-video-1', meta: { memo: '따로 저장한 메모' } },
-    { videoId: 'mock-video-1', meta: { rating: 5 } },
+    { videoId: 'mock-video-1', meta: { rating: 4.5 } },
   ])
   await category.fill('')
   await tags.fill('')
   await form.getByRole('button', { name: '분류 저장', exact: true }).click()
   await expect.poll(async () => (await storedVideo(page))?.category).toBe('')
-  expect(await storedVideo(page)).toMatchObject({ tags: '', memo: '따로 저장한 메모', rating: 5 })
+  expect(await storedVideo(page)).toMatchObject({ tags: '', memo: '따로 저장한 메모', rating: 4.5 })
 })
 
 test('failed saves preserve drafts and input typed during a retry remains unsaved', async ({

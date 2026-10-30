@@ -107,6 +107,16 @@ describe('SQLite migrations and connection', () => {
 })
 
 describe('repositories', () => {
+  it('stores and reads half-star ratings without rounding', () => {
+    insertVideo()
+    const repository = new VideoRepository(db)
+    for (const rating of [0.5, 3.5, 4.5, 5, 0]) {
+      repository.updateMeta('video-1', { rating })
+      expect(new VideoRepository(db).findById('video-1')?.rating).toBe(rating)
+      expect(repository.search({}).videos[0].rating).toBe(rating)
+    }
+  })
+
   it('inserts, searches, updates, and removes videos without erasing their records', () => {
     const repository = new VideoRepository(db)
     insertVideo()
