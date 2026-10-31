@@ -63,7 +63,7 @@
     "lazy-val": "$lazy-val"
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.3.0",
+    "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^19.2.2",
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
