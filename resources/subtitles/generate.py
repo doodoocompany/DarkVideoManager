@@ -494,13 +494,21 @@ class OllamaTranslator:
     """Fallback using an already installed local model; never downloads models."""
     MODEL = "qwen3:8b"
     URL = "http://127.0.0.1:11434"
+    # Loading an 8B model or producing tokens on CPU can exceed one minute.
+    # Bound silent reads separately from the whole attempt, including loading.
+    READ_TIMEOUT_SECONDS = 120
+    ATTEMPT_TIMEOUT_SECONDS = 300
+    MAX_STREAM_BYTES = 2 * 1024 * 1024
+    MAX_EVENT_BYTES = 64 * 1024
+    MAX_RESPONSE_CHARS = 16 * 1024
 
-    def __init__(self, language, sleep=time.sleep, on_retry=None):
+    def __init__(self, language, sleep=time.sleep, on_retry=None, on_activity=None):
         import requests
         self.requests = requests
         self.language = language
         self.sleep = sleep
         self.on_retry = on_retry
+        self.on_activity = on_activity
         response = None
         try:
             try:
@@ -522,9 +530,12 @@ class OllamaTranslator:
                 response.close()
 
     def error_detail(self, error):
+        from urllib3.exceptions import ReadTimeoutError
         if isinstance(error, LocalTranslationError):
             return str(error)
-        if isinstance(error, (TimeoutError, self.requests.exceptions.Timeout)):
+        if (isinstance(error, (TimeoutError, self.requests.exceptions.Timeout)) or
+                (isinstance(error, self.requests.exceptions.ConnectionError) and
+                 any(isinstance(cause, ReadTimeoutError) for cause in error.args))):
             return "Ollama 번역 응답 시간이 초과되었습니다."
         if isinstance(error, self.requests.exceptions.ConnectionError):
             return "Ollama에 연결할 수 없습니다. 실행 상태를 확인하세요."
@@ -573,7 +584,7 @@ class OllamaTranslator:
             # response. Preserve the first request and shorten only retry input.
             prompt_text = text if attempt == 0 else compact_translation_repetitions(text)
             try:
-                with translation_deadline(65):
+                with translation_deadline(self.ATTEMPT_TIMEOUT_SECONDS):
                     return self.translate_once(prompt_text, text, num_predict, retry=attempt > 0, structured=attempt == 2)
             except Exception as error:
                 detail = self.error_detail(error)
@@ -603,6 +614,67 @@ class OllamaTranslator:
             raise LocalTranslationError("Ollama 구조화 번역 응답에 translation 문자열 하나가 필요합니다.")
         return result["translation"]
 
+    def read_stream(self, response):
+        """Accumulate bounded NDJSON fragments, accepting only a final done event.
+
+        Use bytes until a whole line arrives: network chunks can split UTF-8
+        characters, JSON lines, or contain several events. A final event can
+        omit its newline. Partial text never leaves this method on failure.
+        """
+        pending = bytearray()
+        fragments = []
+        received = 0
+        characters = 0
+
+        def consume(line):
+            nonlocal characters
+            if len(line) > self.MAX_EVENT_BYTES:
+                raise LocalTranslationError("Ollama 번역 응답이 크기 한도를 초과했습니다.")
+            try:
+                event = json.loads(line)
+            except (ValueError, TypeError) as error:
+                raise LocalTranslationError("Ollama가 올바르지 않은 JSON 응답을 반환했습니다.") from error
+            if not isinstance(event, dict):
+                raise LocalTranslationError("Ollama가 올바르지 않은 JSON 응답을 반환했습니다.")
+            if event.get("error"):
+                raise LocalTranslationError("Ollama가 번역 요청을 처리하지 못했습니다.")
+            if event.get("done") is not True and event.get("done") is not False:
+                raise LocalTranslationError("Ollama가 완료되지 않은 응답을 반환했습니다.")
+            fragment = event.get("response", "")
+            if not isinstance(fragment, str):
+                raise LocalTranslationError("Ollama 번역 응답의 문자열 형식이 올바르지 않습니다.")
+            characters += len(fragment)
+            if characters > self.MAX_RESPONSE_CHARS:
+                raise LocalTranslationError("Ollama 번역 응답이 크기 한도를 초과했습니다.")
+            fragments.append(fragment)
+            if fragment and self.on_activity:
+                self.on_activity(True)
+            if event["done"]:
+                return {**event, "response": "".join(fragments)}
+            return None
+
+        for chunk in response.iter_content(chunk_size=1024):
+            if not chunk:
+                continue
+            received += len(chunk)
+            if received > self.MAX_STREAM_BYTES:
+                raise LocalTranslationError("Ollama 번역 응답이 크기 한도를 초과했습니다.")
+            pending.extend(chunk)
+            while b"\n" in pending:
+                line, _, remainder = pending.partition(b"\n")
+                pending = bytearray(remainder)
+                if line.strip():
+                    result = consume(line)
+                    if result is not None:
+                        return result
+            if len(pending) > self.MAX_EVENT_BYTES:
+                raise LocalTranslationError("Ollama 번역 응답이 크기 한도를 초과했습니다.")
+        if pending.strip():
+            result = consume(pending)
+            if result is not None:
+                return result
+        raise LocalTranslationError("Ollama가 완료되지 않은 응답을 반환했습니다.")
+
     def translate_once(self, prompt_text, original, num_predict, retry=False, structured=False):
         response = None
         system = (
@@ -618,7 +690,7 @@ class OllamaTranslator:
         payload = {
             "model": self.MODEL, "system": system,
             "prompt": f"Source language: {self.language}\nTranslate the subtitle between <subtitle> tags into Korean.\n<subtitle>\n{prompt_text}\n</subtitle>",
-            "think": False, "stream": False, "options": options,
+            "think": False, "stream": True, "options": options,
         }
         if structured:
             payload["format"] = {
@@ -626,19 +698,18 @@ class OllamaTranslator:
                 "required": ["translation"], "additionalProperties": False,
             }
         try:
+            if self.on_activity:
+                self.on_activity(False)
             response = self.requests.post(
                 f"{self.URL}/api/generate",
                 json=payload,
-                timeout=(5, 60),
+                timeout=(5, self.READ_TIMEOUT_SECONDS),
+                stream=True,
             )
             response.raise_for_status()
-            result = self.read_json(response)
-            if result.get("error"):
-                raise LocalTranslationError("Ollama가 번역 요청을 처리하지 못했습니다.")
+            result = self.read_stream(response)
             if result.get("done_reason") == "length":
                 raise LocalTranslationError("Ollama 번역 응답이 출력 한도에 도달해 잘렸습니다.", output_limit=True)
-            if result.get("done") is not True:
-                raise LocalTranslationError("Ollama가 완료되지 않은 응답을 반환했습니다.")
             text = self.read_structured_translation(result.get("response")) if structured else result.get("response")
             try:
                 return validate_translation(text, original)
@@ -685,13 +756,29 @@ def translate_cues(cues, language, translator_factory=None, sleep=time.sleep, lo
         except Exception:
             cloud_reason = "Google Cloud Translation을 사용할 수 없습니다."
     if local_factory is None:
+        last_activity = 0
+        def activity_progress(receiving):
+            nonlocal last_activity
+            now = time.monotonic()
+            if receiving and now - last_activity < 2:
+                return
+            last_activity = now
+            message = (
+                "로컬 Ollama 번역 응답을 받고 있습니다."
+                if receiving else
+                "로컬 Ollama 응답을 기다리고 있습니다. 모델 로딩이나 CPU 처리에는 시간이 걸릴 수 있습니다."
+            )
+            progress.update(
+                len(translated) * 100 / len(cues),
+                f"{message} (자막 {len(translated) + 1}/{len(cues)})", force=True,
+            )
         def retry_progress(attempt, reason):
             progress.update(
                 len(translated) * 100 / len(cues),
                 f"로컬 번역 재시도 {attempt}/3 (자막 {len(translated) + 1}/{len(cues)}): {reason}",
                 force=True,
             )
-        local_factory = lambda: OllamaTranslator(language, sleep=sleep, on_retry=retry_progress)
+        local_factory = lambda: OllamaTranslator(language, sleep=sleep, on_retry=retry_progress, on_activity=activity_progress)
     local_translator = None
     for index in range(len(translated), len(cues)):
         cue = cues[index]
