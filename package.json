@@ -71,7 +71,7 @@
     "@tailwindcss/postcss": "4.3.3",
     "@tanstack/react-query-devtools": "^5.104.2",
     "@types/better-sqlite3": "^7.6.10",
-    "@types/chardet": "^0.8.3",
+    "@types/chardet": "^1.0.0",
     "@types/fluent-ffmpeg": "^2.1.27",
     "@types/node": "24.19.2",
     "@types/react": "^19.3.0",
