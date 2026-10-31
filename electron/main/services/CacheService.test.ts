@@ -21,7 +21,7 @@ vi.mock('../db/connection', () => ({ getDatabase: () => ({}) }))
 vi.mock('../db/repositories/VideoRepository', () => ({
   VideoRepository: class {
     findById(id: string) {
-      return { id, filePath: 'synthetic.avi' }
+      return { id, filePath: path.join(state.userData, 'synthetic.avi') }
     }
   },
 }))
@@ -61,6 +61,7 @@ beforeEach(() => {
   state.ensureProxy.mockReset()
   library = path.join(state.userData, 'playback-proxies/library')
   fs.mkdirSync(library, { recursive: true })
+  fs.writeFileSync(path.join(state.userData, 'synthetic.avi'), 'source media')
 })
 
 afterEach(() => {

@@ -131,7 +131,7 @@ export const SearchQueryZ = z
 export const VideoMetaZ = z
   .object({
     title: z.string().optional(),
-    rating: z.number().int().min(0).max(5).optional(),
+    rating: z.number().min(0).max(5).multipleOf(0.5).optional(),
     memo: z.string().optional(),
     tags: z.string().optional(),
     category: z.string().optional(),

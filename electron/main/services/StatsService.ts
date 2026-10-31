@@ -116,7 +116,10 @@ function collectLibrary(
     taggedVideos: 0,
   }
   const ratings = buckets(
-    Array.from({ length: 6 }, (_, rating) => [String(rating), rating ? `${rating}점` : '미평가']),
+    Array.from({ length: 11 }, (_, index) => {
+      const rating = index / 2
+      return [String(rating), rating ? `${rating}점` : '미평가']
+    }),
   )
   const resolutions = buckets([
     ['sd', 'SD'],

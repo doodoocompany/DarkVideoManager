@@ -252,7 +252,32 @@ describe('library statistics', () => {
       '60plus': 2,
       unknown: 3,
     })
-    expect(countMap(stats.distributions.ratings)).toEqual({ 0: 6, 1: 0, 2: 0, 3: 1, 4: 0, 5: 1 })
+    expect(countMap(stats.distributions.ratings)).toEqual({
+      0: 6,
+      0.5: 0,
+      1: 0,
+      1.5: 0,
+      2: 0,
+      2.5: 0,
+      3: 1,
+      3.5: 0,
+      4: 0,
+      4.5: 0,
+      5: 1,
+    })
+  })
+
+  it('includes half-star ratings in the distribution and average', () => {
+    video('half', { rating: 0.5 })
+    video('four-half', { rating: 4.5 })
+    video('whole', { rating: 4 })
+    video('unrated')
+    const stats = getStats('stats-test')
+    expect(stats.avgRating).toBe(3)
+    expect(stats.library.ratedVideos).toBe(3)
+    expect(stats.distributions.ratings).toContainEqual({ key: '0.5', label: '0.5점', count: 1 })
+    expect(stats.distributions.ratings).toContainEqual({ key: '4.5', label: '4.5점', count: 1 })
+    expect(stats.distributions.ratings.reduce((total, bucket) => total + bucket.count, 0)).toBe(4)
   })
 
   it('counts unique subtitle coverage and only actual generated-sidecar naming patterns', () => {

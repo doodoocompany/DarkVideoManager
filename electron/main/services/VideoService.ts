@@ -1,5 +1,6 @@
 import { shell, type WebContents } from 'electron'
 import { lstat } from 'fs/promises'
+import { accessSync, constants } from 'fs'
 import type { Database } from 'better-sqlite3'
 import { needsPlaybackProxy } from '../ffmpeg/playback.js'
 import { enqueuePlaybackConversion } from './PlaybackConversionService'
@@ -55,6 +56,26 @@ function assertWritable(db: Database): void {
 async function assertVideoFile(filePath: string): Promise<void> {
   const info = await lstat(filePath)
   if (!info.isFile() && !info.isSymbolicLink()) throw new Error('The selected path is not a file')
+}
+
+function assertReadableVideo(filePath: string): void {
+  try {
+    accessSync(filePath, constants.R_OK)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      throw new Error(
+        '영상 원본 파일을 찾을 수 없습니다. 외장 드라이브 또는 네트워크 드라이브 연결과 파일 위치를 확인한 뒤 다시 시도해 주세요.',
+        { cause: error },
+      )
+    }
+    if (code === 'EACCES' || code === 'EPERM') {
+      throw new Error('영상 원본 파일을 읽을 권한이 없습니다. 파일 접근 권한을 확인해 주세요.', {
+        cause: error,
+      })
+    }
+    throw error
+  }
 }
 
 export async function deleteVideo(
@@ -121,6 +142,7 @@ export async function getPlaybackSource(libraryId: string, videoId: string): Pro
   const video = getVideo(libraryId, videoId)
   if (!video) throw new Error('Video not found')
   if (video.removalMode) throw new Error('제거한 항목은 목록 복구 후 재생할 수 있습니다.')
+  assertReadableVideo(video.filePath)
   if (!needsPlaybackProxy(video.filePath, video.codec)) return video.filePath
   const lease = beginPlaybackCacheLease(libraryId, videoId)
   try {
@@ -146,6 +168,7 @@ export async function openVideoInNativePlayer(
   const video = getVideo(libraryId, videoId)
   if (!video) throw new Error('Video not found')
   if (video.removalMode) throw new Error('제거한 항목은 목록 복구 후 재생할 수 있습니다.')
+  assertReadableVideo(video.filePath)
   const release = acquireSourceFile(video.filePath)
   try {
     const player = await findNativePlayer()
