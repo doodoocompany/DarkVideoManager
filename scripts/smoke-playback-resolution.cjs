@@ -93,6 +93,8 @@ async function inspectLayout(page, fixture, mode) {
     const video = document.querySelector('video')
     const stage = video.parentElement
     const player = stage.parentElement
+    const seekBar = player.querySelector('[aria-label="재생 위치"]')
+    const playbackControls = seekBar?.parentElement?.parentElement
     const rect = (element) => {
       if (!element) return null
       const { left, top, right, bottom, width, height } = element.getBoundingClientRect()
@@ -123,7 +125,8 @@ async function inspectLayout(page, fixture, mode) {
       video: rect(video),
       player: rect(player),
       sidebar: rect(document.querySelector('aside')),
-      seekBar: rect(stage.querySelector('[aria-label="재생 위치"]')),
+      seekBar: rect(seekBar),
+      playbackControls: rect(playbackControls),
       controls,
       highlights,
     }
@@ -139,7 +142,12 @@ async function inspectLayout(page, fixture, mode) {
   assertInside(layout.player, layout.viewport, `${context}: player`)
   assertInside(layout.stage, layout.player, `${context}: video stage`)
   assertInside(layout.video, layout.stage, `${context}: video element`)
-  assertInside(layout.seekBar, layout.stage, `${context}: seek bar`)
+  assertInside(layout.playbackControls, layout.player, `${context}: playback controls`)
+  assertInside(layout.seekBar, layout.playbackControls, `${context}: seek bar`)
+  assert.ok(
+    layout.video.bottom <= layout.playbackControls.top + 1,
+    `${context}: playback controls overlap the video`,
+  )
   assert.ok(layout.stage.height >= 100, `${context}: video stage collapsed`)
   assert.ok(
     layout.controls.some((control) => control.label === '닫기'),

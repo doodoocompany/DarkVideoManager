@@ -1420,7 +1420,7 @@ function VideoPlayer({
         )}
         {isSubtitleEnabled && activeSubtitleText && (
           <div
-            className={`pointer-events-none absolute inset-x-0 z-20 flex justify-center px-8 ${view.isFullscreen ? (view.fullscreenMode === 'highlights' ? 'bottom-12' : 'bottom-6') : orderedSubtitles.length > 1 ? 'bottom-32' : 'bottom-24'}`}
+            className={`pointer-events-none absolute inset-x-0 z-20 flex justify-center px-8 ${view.isFullscreen ? (view.fullscreenMode === 'highlights' ? 'bottom-12' : 'bottom-6') : 'bottom-4'}`}
           >
             <div
               className={
@@ -1513,86 +1513,6 @@ function VideoPlayer({
               {mediaPlaybackError || '인앱 플레이어를 사용할 수 있습니다.'} 라이브러리의 설정에서
               실행 파일을 확인하세요.
             </p>
-          </div>
-        )}
-        {useInAppPlayback && !view.isFullscreen && (
-          <div
-            className={
-              'absolute inset-x-0 bottom-0 z-20 border-t border-white/10 bg-black/75 px-4 py-3 text-white'
-            }
-            onMouseDown={focusPlayerContainer}
-          >
-            <div className={'grid grid-cols-[6.75rem_3rem_minmax(0,1fr)_3rem] items-center gap-3'}>
-              <div className={'flex gap-2'}>
-                <button
-                  type={'button'}
-                  onClick={() => void togglePlayback()}
-                  className={
-                    'flex h-8 min-w-0 flex-1 items-center justify-center rounded bg-white/10 text-xs font-semibold hover:bg-white/20'
-                  }
-                  aria-label={isPaused ? '재생' : '일시정지'}
-                >
-                  {isPaused ? '재생' : '정지'}
-                </button>
-                <button
-                  type={'button'}
-                  onClick={toggleSubtitles}
-                  disabled={!selectedSubtitleTrack}
-                  aria-pressed={isSubtitleEnabled}
-                  aria-label={isSubtitleEnabled ? '자막 끄기' : '자막 켜기'}
-                  className={`h-8 w-12 shrink-0 rounded text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40 ${isSubtitleEnabled ? 'bg-indigo-500/80 text-white hover:bg-indigo-400' : 'bg-white/10 text-zinc-300 hover:bg-white/20'}`}
-                >
-                  {'자막'}
-                </button>
-              </div>
-              <span className={'text-right text-xs tabular-nums text-zinc-300'}>
-                {formatTime(currentTimeSec)}
-              </span>
-              <input
-                type={'range'}
-                min={0}
-                max={seekBarMax}
-                step={0.1}
-                value={Math.min(currentTimeSec, seekBarMax)}
-                disabled={seekBarMax <= 0}
-                aria-label={'재생 위치'}
-                onPointerDown={(event) => {
-                  stopSmoothSeek(false)
-                  mouseSeekingRef.current = true
-                  setIsSeekingWithMouse(true)
-                  event.currentTarget.setPointerCapture(event.pointerId)
-                }}
-                onPointerUp={finishMouseSeek}
-                onPointerCancel={finishMouseSeek}
-                onBlur={finishMouseSeek}
-                onChange={handleSeekChange}
-                className={
-                  'h-2 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-zinc-700 accent-indigo-400 disabled:cursor-not-allowed disabled:opacity-50'
-                }
-                style={{
-                  background: `linear-gradient(to right, #818cf8 0%, #818cf8 ${seekBarProgress}%, #3f3f46 ${seekBarProgress}%, #3f3f46 100%)`,
-                }}
-              />
-              <span className={'text-xs tabular-nums text-zinc-400'}>{formatTime(seekBarMax)}</span>
-            </div>
-            {orderedSubtitles.length > 1 && (
-              <label className="mt-2 flex items-center justify-end gap-2 text-xs text-zinc-300">
-                자막 선택
-                <select
-                  aria-label="자막 선택"
-                  value={selectedSubtitleId ?? ''}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onChange={(event) => selectSubtitleTrack(event.target.value)}
-                  className="h-7 max-w-[70%] rounded border border-zinc-600 bg-zinc-900 px-2 text-zinc-100"
-                >
-                  {orderedSubtitles.map((subtitle) => (
-                    <option key={subtitle.id} value={subtitle.id}>
-                      {subtitleTrackLabel(subtitle, video.filePath)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
           </div>
         )}
         {!useInAppPlayback && nativePlayerInfo && (
@@ -1697,6 +1617,84 @@ function VideoPlayer({
           </div>
         )}
       </div>
+      {useInAppPlayback && !view.isFullscreen && (
+        <div
+          className={'shrink-0 border-t border-white/10 bg-zinc-950 px-4 py-3 text-white'}
+          onMouseDown={focusPlayerContainer}
+        >
+          <div className={'grid grid-cols-[6.75rem_3rem_minmax(0,1fr)_3rem] items-center gap-3'}>
+            <div className={'flex gap-2'}>
+              <button
+                type={'button'}
+                onClick={() => void togglePlayback()}
+                className={
+                  'flex h-8 min-w-0 flex-1 items-center justify-center rounded bg-white/10 text-xs font-semibold hover:bg-white/20'
+                }
+                aria-label={isPaused ? '재생' : '일시정지'}
+              >
+                {isPaused ? '재생' : '정지'}
+              </button>
+              <button
+                type={'button'}
+                onClick={toggleSubtitles}
+                disabled={!selectedSubtitleTrack}
+                aria-pressed={isSubtitleEnabled}
+                aria-label={isSubtitleEnabled ? '자막 끄기' : '자막 켜기'}
+                className={`h-8 w-12 shrink-0 rounded text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40 ${isSubtitleEnabled ? 'bg-indigo-500/80 text-white hover:bg-indigo-400' : 'bg-white/10 text-zinc-300 hover:bg-white/20'}`}
+              >
+                {'자막'}
+              </button>
+            </div>
+            <span className={'text-right text-xs tabular-nums text-zinc-300'}>
+              {formatTime(currentTimeSec)}
+            </span>
+            <input
+              type={'range'}
+              min={0}
+              max={seekBarMax}
+              step={0.1}
+              value={Math.min(currentTimeSec, seekBarMax)}
+              disabled={seekBarMax <= 0}
+              aria-label={'재생 위치'}
+              onPointerDown={(event) => {
+                stopSmoothSeek(false)
+                mouseSeekingRef.current = true
+                setIsSeekingWithMouse(true)
+                event.currentTarget.setPointerCapture(event.pointerId)
+              }}
+              onPointerUp={finishMouseSeek}
+              onPointerCancel={finishMouseSeek}
+              onBlur={finishMouseSeek}
+              onChange={handleSeekChange}
+              className={
+                'h-2 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-zinc-700 accent-indigo-400 disabled:cursor-not-allowed disabled:opacity-50'
+              }
+              style={{
+                background: `linear-gradient(to right, #818cf8 0%, #818cf8 ${seekBarProgress}%, #3f3f46 ${seekBarProgress}%, #3f3f46 100%)`,
+              }}
+            />
+            <span className={'text-xs tabular-nums text-zinc-400'}>{formatTime(seekBarMax)}</span>
+          </div>
+          {orderedSubtitles.length > 1 && (
+            <label className="mt-2 flex items-center justify-end gap-2 text-xs text-zinc-300">
+              자막 선택
+              <select
+                aria-label="자막 선택"
+                value={selectedSubtitleId ?? ''}
+                onMouseDown={(event) => event.stopPropagation()}
+                onChange={(event) => selectSubtitleTrack(event.target.value)}
+                className="h-7 max-w-[70%] rounded border border-zinc-600 bg-zinc-900 px-2 text-zinc-100"
+              >
+                {orderedSubtitles.map((subtitle) => (
+                  <option key={subtitle.id} value={subtitle.id}>
+                    {subtitleTrackLabel(subtitle, video.filePath)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
       {durationSec > 0 && (!view.isFullscreen || view.fullscreenMode === 'highlights') && (
         <div
           role="group"

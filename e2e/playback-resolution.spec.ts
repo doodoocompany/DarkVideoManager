@@ -101,10 +101,22 @@ async function expectPlayerFits(page: Page, detailVisible: boolean) {
   const bounds = await page.locator('video').evaluate((video: HTMLVideoElement) => {
     const rect = video.getBoundingClientRect()
     const stage = video.parentElement!.getBoundingClientRect()
+    const controls = document
+      .querySelector('[aria-label="재생 위치"]')
+      ?.parentElement?.parentElement?.getBoundingClientRect()
     const panel = document.querySelector('aside')?.getBoundingClientRect()
     return {
       video: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
       stage: { left: stage.left, top: stage.top, right: stage.right, bottom: stage.bottom },
+      controls: controls
+        ? {
+            left: controls.left,
+            top: controls.top,
+            right: controls.right,
+            bottom: controls.bottom,
+            height: controls.height,
+          }
+        : null,
       panel: panel ? { left: panel.left, right: panel.right } : null,
       width: window.innerWidth,
       height: window.innerHeight,
@@ -117,9 +129,16 @@ async function expectPlayerFits(page: Page, detailVisible: boolean) {
   expect(bounds.stage.bottom).toBeLessThanOrEqual(bounds.height + 1)
   expect(bounds.video.right).toBeLessThanOrEqual(bounds.stage.right + 1)
   expect(bounds.video.bottom).toBeLessThanOrEqual(bounds.stage.bottom + 1)
+  expect(bounds.controls).not.toBeNull()
+  expect(bounds.controls!.height).toBeGreaterThan(0)
+  expect(bounds.video.bottom).toBeLessThanOrEqual(bounds.controls!.top + 1)
+  expect(bounds.controls!.left).toBeGreaterThanOrEqual(-1)
+  expect(bounds.controls!.right).toBeLessThanOrEqual(bounds.width + 1)
+  expect(bounds.controls!.bottom).toBeLessThanOrEqual(bounds.height + 1)
   if (detailVisible) {
     expect(bounds.panel).not.toBeNull()
     expect(bounds.video.right).toBeLessThanOrEqual(bounds.panel!.left + 1)
+    expect(bounds.controls!.right).toBeLessThanOrEqual(bounds.panel!.left + 1)
     expect(bounds.panel!.right).toBeLessThanOrEqual(bounds.width + 1)
   } else {
     expect(bounds.panel).toBeNull()
